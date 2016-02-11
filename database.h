@@ -24,9 +24,8 @@ along with QMediathekView.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <memory>
 
-#include <QFuture>
+#include <QFutureWatcher>
 #include <QObject>
-#include <QSqlDatabase>
 
 #include "schema.h"
 
@@ -56,6 +55,8 @@ private:
     template< typename Processor >
     void update(const QByteArray& data);
 
+    void updateReady(int index);
+
 public:
     enum SortColumn
     {
@@ -67,22 +68,34 @@ public:
         SortDuration
     };
 
-    QVector< quintptr > query(
-        const QString& channel, const QString& topic, const QString& title,
-        const SortColumn sortColumn, const Qt::SortOrder sortOrder) const;
+    enum SortOrder
+    {
+        SortAscending,
+        SortDescending
+    };
+
+    std::vector< quintptr > query(
+        std::string channel, std::string topic, std::string title,
+        const SortColumn sortColumn, const SortOrder sortOrder) const;
 
 public:
-    std::unique_ptr< Show > show(const quintptr id) const;
+    std::shared_ptr< const Show > show(const quintptr id) const;
 
-    QStringList channels() const;
-    QStringList topics(const QString& channel) const;
+    std::vector< std::string > channels() const;
+    std::vector< std::string > topics(std::string channel) const;
 
 private:
     Settings& m_settings;
 
-    mutable QSqlDatabase m_database;
+    struct Data;
+    using DataPtr = std::shared_ptr< Data >;
+    mutable DataPtr m_data;
 
-    QFuture< void > m_update;
+    using Update = QFutureWatcher< DataPtr >;
+    Update m_update;
+
+    class FullUpdate;
+    class PartialUpdate;
 
 };
 

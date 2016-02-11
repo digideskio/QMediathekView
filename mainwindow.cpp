@@ -50,7 +50,7 @@ namespace
 constexpr auto messageTimeout = 2 * 1000;
 constexpr auto errorMessageTimeout = 10 * 1000;
 
-constexpr auto searchTimeout = 200;
+constexpr auto searchTimeout = 100;
 
 constexpr auto minimumChannelLength = 4;
 constexpr auto minimumTopicLength = 12;

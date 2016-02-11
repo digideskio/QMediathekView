@@ -41,7 +41,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
     {
         if (!channel.empty())
         {
-            show.channel = QString::fromStdString(channel);
+            show.channel = channel;
         }
     }
 
@@ -49,16 +49,16 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
     {
         if (!topic.empty())
         {
-            show.topic = QString::fromStdString(topic);
+            show.topic = topic;
         }
     }
 
     void setTitle(const std::string& title)
     {
-        show.title = QString::fromStdString(title);
+        show.title = title;
     }
 
-    void setDate(const boost::fusion::vector< int, int, int >& date)
+    void setDate(const boost::fusion::vector< unsigned short, unsigned short, unsigned short >& date)
     {
         using boost::fusion::at_c;
 
@@ -66,7 +66,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
         const auto& month = at_c<1>(date);
         const auto& year = at_c<2>(date);
 
-        show.date = QDate(year, month, day);
+        show.date = { year, month, day };
     }
 
     void resetDate()
@@ -82,7 +82,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
         const auto& minute = at_c<1>(time);
         const auto& second = at_c<2>(time);
 
-        show.time = QTime(hour, minute, second);
+        show.time = { hour, minute, second };
     }
 
     void resetTime()
@@ -98,7 +98,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
         const auto& minute = at_c<1>(duration);
         const auto& second = at_c<2>(duration);
 
-        show.duration = QTime(hour, minute, second);
+        show.duration = { hour, minute, second };
     }
 
     void resetDuration()
@@ -108,17 +108,17 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
 
     void setDescription(const std::string& description)
     {
-        show.description = QString::fromStdString(description);
+        show.description = description;
     }
 
     void setWebsite(const std::string& website)
     {
-        show.website = QString::fromStdString(website);
+        show.website = website;
     }
 
     void setUrl(const std::string& url)
     {
-        show.url = QString::fromStdString(url);
+        show.url = url;
     }
 
     void setUrlSmall(const boost::fusion::vector< int, std::string >& replacement)
@@ -129,7 +129,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
         const auto& suffix = at_c<1>(replacement);
 
         show.urlSmallOffset = offset;
-        show.urlSmallSuffix = QString::fromStdString(suffix);
+        show.urlSmallSuffix = suffix;
     }
 
     void resetUrlSmall()
@@ -146,7 +146,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
         const auto& suffix = at_c<1>(replacement);
 
         show.urlLargeOffset = offset;
-        show.urlLargeSuffix = QString::fromStdString(suffix);
+        show.urlLargeSuffix = suffix;
     }
 
     void resetUrlLarge()
@@ -178,7 +178,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
     Rule< void() > emptyItem;
     Rule< std::string() > textItem;
     Rule< boost::fusion::vector< int, std::string >() > textReplacementItem;
-    Rule< boost::fusion::vector< int, int, int >() > dateItem;
+    Rule< boost::fusion::vector< unsigned short, unsigned short, unsigned short >() > dateItem;
     Rule< boost::fusion::vector< int, int, int >() > timeItem;
 
     boost::spirit::qi::rule< Iterator, std::string() > escapedText;
@@ -196,6 +196,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
         using boost::spirit::qi::eps;
         using boost::spirit::qi::lexeme;
         using boost::spirit::qi::lit;
+        using boost::spirit::qi::ushort_;
 
         escapedText %= *(~char_("\\\"")
                          | (lit("\\\\") >> attr('\\'))
@@ -227,7 +228,7 @@ struct Grammar : boost::spirit::qi::grammar< Iterator, void(), Skipper >
 
         dateItem %= eps
                 >> lit('"')
-                >> int_ >> lit('.') >> int_ >> lit('.') >> int_
+                >> ushort_ >> lit('.') >> ushort_ >> lit('.') >> ushort_
                 >> lit('"');
 
         timeItem %= eps

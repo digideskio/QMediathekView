@@ -24,6 +24,8 @@ along with QMediathekView.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "schema.h"
 
+#include <QByteArray>
+
 namespace QMediathekView
 {
 
