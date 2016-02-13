@@ -48,9 +48,9 @@ namespace
 
 void collect(
     const std::vector< std::string >& showsByKey, const std::string& key,
-    const std::vector< Show >& shows, std::vector< quintptr >& id)
+    std::vector< quintptr >& id)
 {
-    for (std::size_t index = 0, count = shows.size(); index < count; ++index)
+    for (std::size_t index = 0, count = showsByKey.size(); index < count; ++index)
     {
         if (showsByKey.at(index).find(key) != std::string::npos)
         {
@@ -97,10 +97,8 @@ void sort(
     }
 }
 
-
-template< typename Member >
 void chronologicalSort(
-    Member member, const Database::SortOrder sortOrder,
+    const std::vector< std::string >& showsByKey, const Database::SortOrder sortOrder,
     const std::vector< Show >& shows, std::vector< quintptr >& id)
 {
     switch (sortOrder)
@@ -112,7 +110,9 @@ void chronologicalSort(
             const auto& lhs_ = shows.at(lhs);
             const auto& rhs_ = shows.at(rhs);
 
-            return std::tie(member(lhs_), rhs_.date, rhs_.time) < std::tie(member(rhs_), lhs_.date, lhs_.time);
+            return operator< (
+                       std::tie(showsByKey.at(lhs), rhs_.date, rhs_.time),
+                       std::tie(showsByKey.at(rhs), lhs_.date, lhs_.time));
         });
         break;
     case Database::SortDescending:
@@ -121,7 +121,9 @@ void chronologicalSort(
             const auto& lhs_ = shows.at(lhs);
             const auto& rhs_ = shows.at(rhs);
 
-            return std::tie(member(rhs_), rhs_.date, rhs_.time) < std::tie(member(lhs_), lhs_.date, lhs_.time);
+            return operator< (
+                       std::tie(showsByKey.at(rhs), rhs_.date, rhs_.time),
+                       std::tie(showsByKey.at(lhs), lhs_.date, lhs_.time));
         });
         break;
     }
@@ -146,14 +148,18 @@ namespace serialization
 template< typename Archive >
 void serialize(Archive& archive, QMediathekView::Show& show, const unsigned int /* version */)
 {
+    // *INDENT-OFF*
+
     archive
-    & show.channel& show.topic& show.title
-    & show.date& show.time
+    & show.channel & show.topic & show.title
+    & show.date & show.time
     & show.duration
-    & show.description& show.website
+    & show.description & show.website
     & show.url
-    & show.urlSmallOffset& show.urlSmallSuffix
-    & show.urlLargeOffset& show.urlLargeSuffix;
+    & show.urlSmallOffset & show.urlSmallSuffix
+    & show.urlLargeOffset & show.urlLargeSuffix;
+
+    // *INDENT-ON*
 }
 
 } // serialization
@@ -173,55 +179,68 @@ struct Database::Data
     std::vector< std::string > channels;
     std::vector< std::pair< std::string, std::string > > topics;
 
-    void insert(const Show& show)
+    void sort()
     {
-        shows.push_back(show);
+        shows.shrink_to_fit();
 
-        index(show);
-    }
-
-    void update(const Show& newShow)
-    {
-        const auto pos = std::find_if(shows.begin(), shows.end(), [&](const Show& oldShow)
+        std::sort(shows.begin(), shows.end(), [](const Show& lhs, const Show& rhs)
         {
-            return newShow.channel == oldShow.channel
-                   && newShow.topic == oldShow.topic
-                   && newShow.title == oldShow.title
-                   && newShow.url == oldShow.url;
+            return operator< (
+                       std::tie(lhs.channel, rhs.date, rhs.time),
+                       std::tie(rhs.channel, lhs.date, lhs.time));
         });
-
-        if (pos != shows.end())
-        {
-            *pos = newShow;
-        }
-        else
-        {
-            insert(newShow);
-        }
     }
 
-    void index(const Show& show)
+    void index()
     {
-        showsByTopic.push_back(boost::to_lower_copy(show.topic));
-        showsByChannel.push_back(boost::to_lower_copy(show.channel));
-        showsByTitle.push_back(boost::to_lower_copy(show.title));
+        showsByChannel.clear();
+        showsByChannel.reserve(shows.size());
 
+        showsByTopic.clear();
+        showsByTopic.reserve(shows.size());
+
+        showsByTitle.clear();
+        showsByTitle.reserve(shows.size());
+
+        channels.clear();
+        topics.clear();
+
+        for (const auto& show : shows)
         {
-            const auto pos = std::lower_bound(channels.begin(), channels.end(), show.channel);
-            if (pos == channels.end() || *pos != show.channel)
+            showsByTopic.push_back(boost::to_lower_copy(show.topic));
+            showsByChannel.push_back(boost::to_lower_copy(show.channel));
+            showsByTitle.push_back(boost::to_lower_copy(show.title));
+
             {
-                channels.insert(pos, show.channel);
+                const auto pos = std::lower_bound(channels.begin(), channels.end(), show.channel);
+                if (pos == channels.end() || *pos != show.channel)
+                {
+                    channels.insert(pos, show.channel);
+                }
+            }
+
+            {
+                auto pair = std::make_pair(boost::to_lower_copy(show.channel), show.topic);
+                const auto pos = std::lower_bound(topics.begin(), topics.end(), pair);
+                if (pos == topics.end() || *pos != pair)
+                {
+                    topics.insert(pos, std::move(pair));
+                }
             }
         }
 
-        {
-            auto pair = std::make_pair(boost::to_lower_copy(show.channel), show.topic);
-            const auto pos = qLowerBound(topics.begin(), topics.end(), pair);
-            if (pos == topics.end() || *pos != pair)
-            {
-                topics.insert(pos, std::move(pair));
-            }
-        }
+        channels.shrink_to_fit();
+        topics.shrink_to_fit();
+    }
+
+};
+
+class Database::Transaction
+{
+public:
+    Transaction()
+        : m_data(std::make_shared< Data >())
+    {
     }
 
     bool load(const char* path)
@@ -230,12 +249,7 @@ struct Database::Data
         {
             std::ifstream file(path, std::ios::binary);
             boost::archive::binary_iarchive archive(file);
-            archive >> shows;
-
-            for (const auto& show : shows)
-            {
-                index(show);
-            }
+            archive >> m_data->shows;
 
             return true;
         }
@@ -253,7 +267,7 @@ struct Database::Data
         {
             std::ofstream file(path, std::ios::binary);
             boost::archive::binary_oarchive archive(file);
-            archive << shows;
+            archive << m_data->shows;
 
             return true;
         }
@@ -265,41 +279,61 @@ struct Database::Data
         }
     }
 
+    DataPtr&& commit()
+    {
+        m_data->sort();
+        m_data->index();
+
+        return std::move(m_data);
+    }
+
+protected:
+    DataPtr m_data;
+
 };
 
-class Database::FullUpdate : public Processor
+struct Database::FullUpdate
+    : public Database::Transaction
+    , public Processor
 {
-public:
-    FullUpdate(Data& data)
-        : m_data(data)
+    FullUpdate(const DataPtr& /* data */)
     {
     }
 
     void operator()(const Show& show) override
     {
-        m_data.insert(show);
+        m_data->shows.push_back(show);
     }
-
-protected:
-    Data& m_data;
 
 };
 
-class Database::PartialUpdate : public Processor
+struct Database::PartialUpdate
+    : public Database::Transaction
+    , public Processor
 {
-public:
-    PartialUpdate(Data& data)
-        : m_data(data)
+    PartialUpdate(const DataPtr& data)
     {
+        m_data->shows = data->shows;
     }
 
     void operator()(const Show& newShow) override
     {
-        m_data.update(newShow);
-    }
+        const auto pos = std::find_if(m_data->shows.begin(), m_data->shows.end(), [&](const Show& oldShow)
+        {
+            return operator== (
+                       std::tie(newShow.title, newShow.url, newShow.channel, newShow.topic),
+                       std::tie(oldShow.title, oldShow.url, oldShow.channel, oldShow.topic));
+        });
 
-private:
-    Data& m_data;
+        if (pos != m_data->shows.end())
+        {
+            *pos = newShow;
+        }
+        else
+        {
+            m_data->shows.push_back(newShow);
+        }
+    }
 
 };
 
@@ -310,11 +344,11 @@ Database::Database(Settings& settings, QObject* parent)
 {
     connect(&m_update, &Update::resultReadyAt, this, &Database::updateReady);
 
-    const auto newData = std::make_shared< Data >();
+    Transaction transaction;
 
-    if (newData->load(databasePath().constData()))
+    if (transaction.load(databasePath().constData()))
     {
-        m_data = newData;
+        m_data = transaction.commit();
     }
 }
 
@@ -334,8 +368,7 @@ void Database::partialUpdate(const QByteArray& data)
     update< PartialUpdate >(data);
 }
 
-
-template< typename Processor >
+template< typename Transaction >
 void Database::update(const QByteArray& data)
 {
     if (m_update.isRunning())
@@ -343,38 +376,36 @@ void Database::update(const QByteArray& data)
         return;
     }
 
-    m_update.setFuture(QtConcurrent::run([data]()
+    m_update.setFuture(QtConcurrent::run([this, data]()
     {
-        const auto newData = std::make_shared< Data >();
+        Transaction transaction(m_data);
 
-        Processor processor(*newData);
-
-        if (!parse(data, processor))
+        if (!parse(data, transaction))
         {
             return DataPtr();
         }
 
-        if (!newData->save(databasePath().constData()))
+        if (!transaction.save(databasePath().constData()))
         {
             return DataPtr();
         }
 
-        return newData;
+        return transaction.commit();
     }));
 }
 
 void Database::updateReady(int index)
 {
-    const auto newData = m_update.resultAt(index);
+    const auto data = m_update.resultAt(index);
 
-    if (!newData)
+    if (!data)
     {
         emit failedToUpdate("Failed to parse or save data.");
 
         return;
     }
 
-    m_data = newData;
+    m_data = data;
 
     m_settings.setDatabaseUpdatedOn();
 
@@ -391,48 +422,49 @@ std::vector< quintptr > Database::query(
     boost::to_lower(topic);
     boost::to_lower(title);
 
-    if (!title.empty())
+    if (!channel.empty())
     {
-        collect(m_data->showsByTitle, title, m_data->shows, id);
-
+        collect(m_data->showsByChannel, channel, id);
         filter(m_data->showsByTopic, topic, id);
-        filter(m_data->showsByChannel, channel, id);
+        filter(m_data->showsByTitle, title, id);
     }
     else if (!topic.empty())
     {
-        collect(m_data->showsByTopic, topic, m_data->shows, id);
-
-        filter(m_data->showsByTitle, title, id);
+        collect(m_data->showsByTopic, topic, id);
         filter(m_data->showsByChannel, channel, id);
-    }
-    else if (!channel.empty())
-    {
-        collect(m_data->showsByChannel, channel, m_data->shows, id);
-
         filter(m_data->showsByTitle, title, id);
+    }
+    else if (!title.empty())
+    {
+        collect(m_data->showsByTitle, title, id);
+        filter(m_data->showsByChannel, channel, id);
         filter(m_data->showsByTopic, topic, id);
     }
     else
     {
-        id.reserve(m_data->shows.size());
-
-        for (std::size_t index = 0, count = m_data->shows.size(); index < count; ++index)
-        {
-            id.push_back(index);
-        }
+        id.resize(m_data->shows.size());
+        std::iota(id.begin(), id.end(), 0);
     }
 
     switch (sortColumn)
     {
     default:
     case SortChannel:
-        chronologicalSort(std::mem_fn(&Show::channel), sortOrder, m_data->shows, id);
+        switch (sortOrder)
+        {
+        default:
+        case SortAscending:
+            break;
+        case SortDescending:
+            chronologicalSort(m_data->showsByChannel, sortOrder, m_data->shows, id);
+            break;
+        }
         break;
     case SortTopic:
-        chronologicalSort(std::mem_fn(&Show::topic), sortOrder, m_data->shows, id);
+        chronologicalSort(m_data->showsByTopic, sortOrder, m_data->shows, id);
         break;
     case SortTitle:
-        chronologicalSort(std::mem_fn(&Show::title), sortOrder, m_data->shows, id);
+        chronologicalSort(m_data->showsByTitle, sortOrder, m_data->shows, id);
         break;
     case SortDate:
         sort(std::mem_fn(&Show::date), sortOrder, m_data->shows, id);

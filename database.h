@@ -52,7 +52,7 @@ public:
     void partialUpdate(const QByteArray& data);
 
 private:
-    template< typename Processor >
+    template< typename Transaction >
     void update(const QByteArray& data);
 
     void updateReady(int index);
@@ -90,6 +90,8 @@ private:
     struct Data;
     using DataPtr = std::shared_ptr< Data >;
     mutable DataPtr m_data;
+
+    class Transaction;
 
     using Update = QFutureWatcher< DataPtr >;
     Update m_update;
