@@ -147,17 +147,17 @@ QVariant Model::data(const QModelIndex& index, int role) const
     switch (column)
     {
     case 0:
-        return QString::fromStdString(m_database.show(id)->channel);
+        return QString::fromStdString(m_database.channel(id));
     case 1:
-        return QString::fromStdString(m_database.show(id)->topic);
+        return QString::fromStdString(m_database.topic(id));
     case 2:
-        return QString::fromStdString(m_database.show(id)->title);
+        return QString::fromStdString(m_database.title(id));
     case 3:
-        return formatDate(m_database.show(id)->date, tr("dd.MM.yy"));
+        return formatDate(m_database.date(id), tr("dd.MM.yy"));
     case 4:
-        return formatTime(m_database.show(id)->time, tr("hh:mm"));
+        return formatTime(m_database.time(id), tr("hh:mm"));
     case 5:
-        return formatTime(m_database.show(id)->duration, tr("hh:mm:ss"));
+        return formatTime(m_database.duration(id), tr("hh:mm:ss"));
     default:
         return {};
     }
@@ -256,7 +256,7 @@ QString Model::title(const QModelIndex& index) const
         return {};
     }
 
-    return QString::fromStdString(m_database.show(index.internalId())->title);
+    return QString::fromStdString(m_database.title(index.internalId()));
 }
 
 QString Model::description(const QModelIndex& index) const
@@ -266,7 +266,7 @@ QString Model::description(const QModelIndex& index) const
         return {};
     }
 
-    return QString::fromStdString(m_database.show(index.internalId())->description);
+    return QString::fromStdString(m_database.description(index.internalId()));
 }
 
 QString Model::website(const QModelIndex& index) const
@@ -276,7 +276,7 @@ QString Model::website(const QModelIndex& index) const
         return {};
     }
 
-    return QString::fromStdString(m_database.show(index.internalId())->website);
+    return QString::fromStdString(m_database.website(index.internalId()));
 }
 
 QString Model::url(const QModelIndex& index) const
@@ -286,7 +286,7 @@ QString Model::url(const QModelIndex& index) const
         return {};
     }
 
-    return QString::fromStdString(m_database.show(index.internalId())->url);
+    return QString::fromStdString(m_database.url(index.internalId()));
 }
 
 QString Model::urlSmall(const QModelIndex& index) const
@@ -296,7 +296,7 @@ QString Model::urlSmall(const QModelIndex& index) const
         return {};
     }
 
-    return QString::fromStdString(m_database.show(index.internalId())->urlSmall());
+    return QString::fromStdString(m_database.urlSmall(index.internalId()));
 }
 
 QString Model::urlLarge(const QModelIndex& index) const
@@ -306,7 +306,7 @@ QString Model::urlLarge(const QModelIndex& index) const
         return {};
     }
 
-    return QString::fromStdString(m_database.show(index.internalId())->urlLarge());
+    return QString::fromStdString(m_database.urlLarge(index.internalId()));
 }
 
 void Model::update()
